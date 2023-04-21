@@ -1,31 +1,35 @@
 import sqlite3
 
 DB_NAME = 'employee_data.db'
+conn = sqlite3.connect(DB_NAME)
+cursor = conn.cursor()
 
 def main():
     create_db_if_not_exists()
-    
+        
     while True:
         command = input("Enter a command (add, view, totals, end): ")
         if command == "add":
             add_employee()
         elif command == "view":
             employee_name = input("Enter an employee name to view, or press enter to view all: ")
+            print()
+            print()
             display_employee_info(employee_name)
         elif command == "totals":
             display_totals()
         elif command == "end":
-            break
+            conn.commit()
+            conn.close()
+            exit()
         else:
             print("Invalid command. Please enter add, view, totals, or end.")
-
-    conn.close()
+ 
 
 
 
 def create_db_if_not_exists():
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
+    
     cursor.execute('''CREATE TABLE IF NOT EXISTS employees
         (id INTEGER PRIMARY KEY AUTOINCREMENT,
          name TEXT NOT NULL,
