@@ -35,7 +35,19 @@ def create_db_if_not_exists():
          gross_pay REAL NOT NULL,
          tax REAL NOT NULL,
          net_pay REAL NOT NULL)''')
+    
+    cursor.execute('''CREATE TABLE IF NOT EXISTS totals
+        (id INTEGER PRIMARY KEY,
+         total_hours REAL NOT NULL,
+         total_gross REAL NOT NULL,
+         total_net REAL NOT NULL,
+         total_employees INTEGER NOT NULL)''')
+
+
+    cursor.execute("INSERT OR IGNORE INTO totals (id, total_hours, total_gross, total_net, total_employees) VALUES (1, 0, 0, 0, 0)")
+
     conn.commit()
+
 
 def add_employee():
     first_name = input("Enter employee's first name: ").capitalize()
@@ -55,8 +67,12 @@ def add_employee():
     cursor = conn.cursor()
     cursor.execute('''INSERT INTO employees (name, hours_worked, hourly_rate, tax_rate, gross_pay, tax, net_pay)
                       VALUES (?, ?, ?, ?, ?, ?, ?)''', (name, hours_worked, hourly_rate, tax_rate, gross_pay, tax, net_pay))
+
+    cursor.execute("UPDATE totals SET total_hours = total_hours + ?, total_gross = total_gross + ?, total_net = total_net + ?, total_employees = total_employees + 1 WHERE id = 1", (hours_worked, gross_pay, net_pay))
+
     conn.commit()
     print(f"{name} added to employee data.")
+
 
 def calculate_pay(hours_worked, hourly_rate, tax_rate):
     overtime_rate = hourly_rate * 1.5
@@ -91,40 +107,20 @@ def display_employee_info(employee_name=None):
         print("Hours Worked:", row[2])
         print("Hourly Rate:", row[3])
         print("Tax:", row[6])
-        print("Tax Rate:", f"{row[4]*100}%")
         print("Net Pay:", row[7])
         print("Gross Pay:", row[5])
+        print()
+        print()
 
 def display_totals():
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-
-    # Get the data from all employee tables
-    cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
-    table_names = [row[0] for row in cursor.fetchall()]
-
-    if not table_names:
-        print("No employee data found.")
-        return
-
-    total_hours_worked = 0
-    total_net_pay = 0
-    total_gross_pay = 0
-    num_employees = len(table_names)
-
-    # Calculate the combined totals from all employee tables
-    for table_name in table_names:
-        cursor.execute(f"SELECT SUM(hours_worked), SUM(net_pay), SUM(gross_pay) FROM {table_name}")
-        row = cursor.fetchone()
-        total_hours_worked += row[0] or 0
-        total_net_pay += row[1] or 0
-        total_gross_pay += row[2] or 0
-
-    # Display the totals
-    print(f"Total Number of Employees: {num_employees}")
-    print(f"Total Hours Worked: {total_hours_worked}")
-    print(f"Total Net Pay: {total_net_pay}")
-    print(f"Total Gross Pay: {total_gross_pay}")
+    cursor.execute("SELECT total_hours, total_gross, total_net, total_employees FROM totals WHERE id = 1")
+    result = cursor.fetchone()
+    print(f"Total hours worked: {result[0]}")
+    print(f"Total gross pay: ${result[1]:,.2f}")
+    print(f"Total net pay: ${result[2]:,.2f}")
+    print(f"Total employees: {result[3]}")
 
 
 if __name__ == '__main__':
