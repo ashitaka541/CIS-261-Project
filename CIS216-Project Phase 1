@@ -1,0 +1,131 @@
+import sqlite3
+
+DB_NAME = 'employee_data.db'
+
+def main():
+    create_db_if_not_exists()
+    
+    while True:
+        command = input("Enter a command (add, view, totals, end): ")
+        if command == "add":
+            add_employee()
+        elif command == "view":
+            employee_name = input("Enter an employee name to view, or press enter to view all: ")
+            display_employee_info(employee_name)
+        elif command == "totals":
+            display_totals()
+        elif command == "end":
+            break
+        else:
+            print("Invalid command. Please enter add, view, totals, or end.")
+
+    conn.close()
+
+
+
+def create_db_if_not_exists():
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('''CREATE TABLE IF NOT EXISTS employees
+        (id INTEGER PRIMARY KEY AUTOINCREMENT,
+         name TEXT NOT NULL,
+         hours_worked REAL NOT NULL,
+         hourly_rate REAL NOT NULL,
+         tax_rate REAL NOT NULL,
+         gross_pay REAL NOT NULL,
+         tax REAL NOT NULL,
+         net_pay REAL NOT NULL)''')
+    conn.commit()
+
+def add_employee():
+    first_name = input("Enter employee's first name: ").capitalize()
+    last_name = input("Enter employee's last name: ").capitalize()
+    name = f"{first_name} {last_name}"
+    hours_worked = float(input("Enter hours worked: "))
+    hourly_rate = float(input("Enter hourly rate: "))
+    tax_rate = float(input("Enter tax rate: "))
+
+    try:
+        gross_pay, tax, net_pay = calculate_pay(hours_worked, hourly_rate, tax_rate)
+    except ValueError:
+        print("Error adding employee: Invalid input data.")
+        return
+
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('''INSERT INTO employees (name, hours_worked, hourly_rate, tax_rate, gross_pay, tax, net_pay)
+                      VALUES (?, ?, ?, ?, ?, ?, ?)''', (name, hours_worked, hourly_rate, tax_rate, gross_pay, tax, net_pay))
+    conn.commit()
+    print(f"{name} added to employee data.")
+
+def calculate_pay(hours_worked, hourly_rate, tax_rate):
+    overtime_rate = hourly_rate * 1.5
+    if hours_worked > 40:
+        overtime_hours = hours_worked - 40
+        regular_pay = 40 * hourly_rate
+        overtime_pay = overtime_hours * overtime_rate
+        gross_pay = regular_pay + overtime_pay
+    else:
+        gross_pay = hours_worked * hourly_rate
+    tax = gross_pay * (tax_rate / 100)
+    net_pay = gross_pay - tax
+    return gross_pay, tax, net_pay
+
+def display_employee_info(employee_name=None):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+
+    if employee_name:
+        cursor.execute("SELECT * FROM employees WHERE name=?", (employee_name,))
+    else:
+        cursor.execute("SELECT * FROM employees")
+
+    rows = cursor.fetchall()
+
+    if not rows:
+        print("No results found.")
+        return
+
+    for row in rows:
+        print("Employee Name:", row[1])
+        print("Hours Worked:", row[2])
+        print("Hourly Rate:", row[3])
+        print("Tax:", row[6])
+        print("Tax Rate:", f"{row[4]*100}%")
+        print("Net Pay:", row[7])
+        print("Gross Pay:", row[5])
+
+def display_totals():
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+
+    # Get the data from all employee tables
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    table_names = [row[0] for row in cursor.fetchall()]
+
+    if not table_names:
+        print("No employee data found.")
+        return
+
+    total_hours_worked = 0
+    total_net_pay = 0
+    total_gross_pay = 0
+    num_employees = len(table_names)
+
+    # Calculate the combined totals from all employee tables
+    for table_name in table_names:
+        cursor.execute(f"SELECT SUM(hours_worked), SUM(net_pay), SUM(gross_pay) FROM {table_name}")
+        row = cursor.fetchone()
+        total_hours_worked += row[0] or 0
+        total_net_pay += row[1] or 0
+        total_gross_pay += row[2] or 0
+
+    # Display the totals
+    print(f"Total Number of Employees: {num_employees}")
+    print(f"Total Hours Worked: {total_hours_worked}")
+    print(f"Total Net Pay: {total_net_pay}")
+    print(f"Total Gross Pay: {total_gross_pay}")
+
+
+if __name__ == '__main__':
+    main()
