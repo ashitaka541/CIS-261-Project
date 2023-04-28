@@ -1,4 +1,5 @@
 import sqlite3
+import datetime
 
 DB_NAME = 'employee_data.db'
 conn = sqlite3.connect(DB_NAME)
@@ -6,16 +7,21 @@ cursor = conn.cursor()
 
 def main():
     create_db_if_not_exists()
-        
     while True:
         command = input("Enter a command (add, view, totals, end): ")
         if command == "add":
             add_employee()
         elif command == "view":
-            employee_name = input("Enter an employee name to view, or press enter to view all: ")
-            print()
-            print()
-            display_employee_info(employee_name)
+            view_option = input("Enter a view option (employee, date): ")
+            if view_option == "employee":
+                employee_name = input("Enter an employee name to view, or press enter to view all: ")
+                print()
+                print()
+                display_employee_info(employee_name)
+            elif view_option == "date":
+                find_by_date()
+            else:
+                print("Invalid view option. Please enter employee or date.")
         elif command == "totals":
             display_totals()
         elif command == "end":
@@ -26,9 +32,10 @@ def main():
             print("Invalid command. Please enter add, view, totals, or end.")
 
 def create_db_if_not_exists():
-    
     cursor.execute('''CREATE TABLE IF NOT EXISTS employees
         (id INTEGER PRIMARY KEY AUTOINCREMENT,
+         from_date TEXT NOT NULL,
+         to_date TEXT NOT NULL,
          name TEXT NOT NULL,
          hours_worked REAL NOT NULL,
          hourly_rate REAL NOT NULL,
@@ -36,42 +43,44 @@ def create_db_if_not_exists():
          gross_pay REAL NOT NULL,
          tax REAL NOT NULL,
          net_pay REAL NOT NULL)''')
-    
     cursor.execute('''CREATE TABLE IF NOT EXISTS totals
         (id INTEGER PRIMARY KEY,
          total_hours REAL NOT NULL,
          total_gross REAL NOT NULL,
          total_net REAL NOT NULL,
          total_employees INTEGER NOT NULL)''')
-
-
     cursor.execute("INSERT OR IGNORE INTO totals (id, total_hours, total_gross, total_net, total_employees) VALUES (1, 0, 0, 0, 0)")
-
     conn.commit()
 
+def input_dates():
+    while True:
+        from_date = input("Enter the from date (mm/dd/yyyy): ")
+        to_date = input("Enter the to date (mm/dd/yyyy): ")
+        try:
+            date_format = "%m/%d/%y" if "/" in from_date[-5:] else "%m/%d/%Y"
+            date_range = datetime.datetime.strptime(from_date, date_format).strftime("%m/%d/%Y") + " to " + datetime.datetime.strptime(to_date, date_format).strftime("%m/%d/%Y")
+            return from_date, to_date
+        except ValueError:
+            print("Invalid date format, please enter date in the format mm/dd/yyyy")
+
 def add_employee():
+    from_date, to_date = input_dates()
     first_name = input("Enter employee's first name: ").capitalize()
     last_name = input("Enter employee's last name: ").capitalize()
     name = f"{first_name} {last_name}"
     hours_worked = float(input("Enter hours worked: "))
     hourly_rate = float(input("Enter hourly rate: "))
     tax_rate = float(input("Enter tax rate: "))
-
     try:
         gross_pay, tax, net_pay = calculate_pay(hours_worked, hourly_rate, tax_rate)
     except ValueError:
         print("Error adding employee: Invalid input data.")
         return
-
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    cursor.execute('''INSERT INTO employees (name, hours_worked, hourly_rate, tax_rate, gross_pay, tax, net_pay)
-                      VALUES (?, ?, ?, ?, ?, ?, ?)''', (name, hours_worked, hourly_rate, tax_rate, gross_pay, tax, net_pay))
-
+    cursor.execute('''INSERT INTO employees (name, hours_worked, hourly_rate, tax_rate, gross_pay, tax, net_pay, from_date, to_date)
+                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''', (name, hours_worked, hourly_rate, tax_rate, gross_pay, tax, net_pay, from_date, to_date))
     cursor.execute("UPDATE totals SET total_hours = total_hours + ?, total_gross = total_gross + ?, total_net = total_net + ?, total_employees = total_employees + 1 WHERE id = 1", (hours_worked, gross_pay, net_pay))
-
     conn.commit()
-    print(f"{name} added to employee data.")
+    print(f"Employee Name: {name}\nHours Worked: {hours_worked}\nHourly Rate: {hourly_rate}\nTax Rate: {tax_rate}\nGross Pay: {gross_pay}\nTax: {tax}\nNet Pay: {net_pay}\nFrom Date: {from_date}\nTo Date: {to_date}")
 
 def calculate_pay(hours_worked, hourly_rate, tax_rate):
     overtime_rate = hourly_rate * 1.5
@@ -87,39 +96,59 @@ def calculate_pay(hours_worked, hourly_rate, tax_rate):
     return gross_pay, tax, net_pay
 
 def display_employee_info(employee_name=None):
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-
     if employee_name:
         cursor.execute("SELECT * FROM employees WHERE name=?", (employee_name,))
     else:
         cursor.execute("SELECT * FROM employees")
-
     rows = cursor.fetchall()
-
     if not rows:
         print("No results found.")
         return
-
     for row in rows:
-        print("Employee Name:", row[1])
-        print("Hours Worked:", row[2])
-        print("Hourly Rate:", row[3])
-        print("Tax:", row[6])
-        print("Net Pay:", row[7])
-        print("Gross Pay:", row[5])
-        print()
+        print("From Date:", row[1])
+        print("To Date:", row[2])
+        print("Employee Name:", row[3])
+        print("Hours Worked:", row[4])
+        print("Hourly Rate:", row[5])
+        print("Gross Pay:", row[7])
+        print("Tax:", row[8])
+        print("Net Pay:", row[9])
         print()
 
 def display_totals():
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
     cursor.execute("SELECT total_hours, total_gross, total_net, total_employees FROM totals WHERE id = 1")
     result = cursor.fetchone()
     print(f"Total hours worked: {result[0]}")
     print(f"Total gross pay: ${result[1]:,.2f}")
     print(f"Total net pay: ${result[2]:,.2f}")
     print(f"Total employees: {result[3]}")
+
+def find_by_date():
+    while True:
+        from_date = input("Enter the from date (mm/dd/yyyy): ")
+        to_date = input("Enter the to date (mm/dd/yyyy): ")
+        try:
+            date_format = "%m/%d/%y" if "/" in from_date[-5:] else "%m/%d/%Y"
+            date_range = datetime.datetime.strptime(from_date, date_format).strftime("%m/%d/%Y") + " to " + datetime.datetime.strptime(to_date, date_format).strftime("%m/%d/%Y")
+            cursor.execute("SELECT * FROM employees WHERE from_date >= ? AND to_date <= ?", (from_date, to_date))
+            rows = cursor.fetchall()
+            if not rows:
+                print("No results found.")
+            else:
+                for row in rows:
+                    print("Employee Name:", row[3])
+                    print("From Date:", row[1])
+                    print("To Date:", row[2])
+                    print("Hours Worked:", row[4])
+                    print("Hourly Rate:", row[5])
+                    print("Tax Rate:", row[6])
+                    print("Gross Pay:", row[7])
+                    print("Tax:", row[8])
+                    print("Net Pay:", row[9])
+                    print()
+            break
+        except ValueError:
+            print("Invalid date format, please enter date in the format mm/dd/yyyy")
 
 
 if __name__ == '__main__':
